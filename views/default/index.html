@@ -1,0 +1,345 @@
+{{extend 'layout.html'}}
+
+{{block head}}
+<script src="{{=URL('static','js/vue.js')}}"></script>
+<script>
+
+	var get_product_list_url = "{{=URL('api','get_product_list')}}";
+
+	var set_stars_url = "{{=URL('api', 'set_stars', user_signature=True, hash_vars=False)}}";
+
+	var get_user_review_url = "{{=URL('api', 'get_user_review', user_signature=True, hash_vars=False)}}";
+
+	var save_user_review_url = "{{=URL('api', 'save_user_review', user_signature=True, hash_vars=False)}}";
+
+	var get_other_reviews_url = "{{=URL('api', 'get_other_reviews', user_signature=True, hash_vars=False)}}";
+
+	var get_user_url = "{{=URL('api', 'get_user', user_signature=True, hash_vars=False)}}";
+
+	var get_average_star_url = "{{=URL('api', 'get_average_stars', user_signature=True, hash_vars=False)}}";
+
+	var get_shopping_cart_url = "{{=URL('api', 'get_shopping_cart', user_signature=True, hash_vars=False)}}";
+
+	var add_to_shopping_cart_url = "{{=URL('api', 'add_to_shopping_cart', user_signature=True, hash_vars=False)}}";
+
+	var get_quantity_url = "{{=URL('api', 'get_quantity', user_signature=True, hash_vars=False)}}";
+
+	var set_quantity_url = "{{=URL('api', 'set_quantity', user_signature=True, hash_vars=False)}}";
+
+	var increment_quantity_url = "{{=URL('api', 'increment_quantity', user_signature=True, hash_vars=False)}}";
+
+	var decrement_quantity_url = "{{=URL('api', 'decrement_quantity', user_signature=True, hash_vars=False)}}";
+
+	var clear_cart_url = "{{=URL('api', 'clear_cart', user_signature=True, hash_vars=False)}}";
+
+	var is_logged_in = {{='false' if auth.user is None else 'true'}};
+
+
+</script>
+{{end}}
+
+
+
+<div class="main_content">
+
+    <div id="vue-div" class="display:none">
+      <!-- Your code goes here.  Remember to call $("#vue-div").show() once you get the data for the first time. -->
+
+      <div class="shell">
+
+      	<!-- If the user is logged in, be able to toggle the shopping cart -->
+      	<div v-if="user_email != undefined" class="toggle_shop">
+
+      		<!-- if  we're in the shop and the shopping cart isn't empty-->
+      		<div v-if="!mode">
+      			<div v-if="shopping_cart.length != 0">
+      				
+      				<!-- Clicking the Shopping Cart button allows us to go to shopping cart AND initialize our values in the shopping cart -->
+      				<button class="toggle_shop" v-on:click="toggle_mode(); populate();">Go to Shopping Cart</button>
+      			</div>
+      		</div>
+
+      		<!-- if we're in the shopping cart and want to return back to shop -->
+      		<div v-if="mode">
+      		<button class="toggle_shop" v-on:click="toggle_mode(); populate();">Go to Store</button>
+      		</div>
+      	</div>
+
+      	
+      
+      	<div v-if="!mode" class="shopping_mode">
+	      <!-- BASE CASE = 0. -->
+	      <div v-if="product_list.length === 0">
+	      <h3>Please begin by adding a product!<br>There are no products in shop</h3>
+	  	  </div>
+
+	  	  <!-- If there exists products in our product list -->
+	      <div v-if="product_list.length > 0">
+	      <!-- We display the posts, starting with a search bar interface -->
+		      <h3>Search Bar</h3>
+		      <input type="text" v-model="search_string" v-on:input="search_products">
+
+		      <!-- the product list container -->
+		      <div id="product_list">
+		      	<br>
+
+		      	<!-- if the product is not hidden, proceed -->
+		        <div class="product_div" v-for="product in product_list" v-if="!product.is_hidden">
+
+		        	<!-- containers are seperate for each of the displayed attributes -->
+		          <div class="item_name">Item Name: ${product.item_name}</div>
+		          <br>
+		          <div class="item_description">Description: ${product.item_description}</div>
+		          <br>
+		          <div v-if="product.selling_price % 2 != 1">
+		          	<div class="item_price">Item Price: $${product.selling_price}</div>
+		      	  </div>
+		      	  <div v-if="product.selling_price % 2 === 1">
+		      	  	<div class="item_price">Item Price: $${product.selling_price}</div>
+		      	  </div>
+		       	  <br>
+		       	  <div class="stock_quantity">Stock Quantity:
+		       	  ${product.stock_quantity}</div>
+		       	  <br>
+
+		       	  
+		          <div class="attributes">
+		            
+
+		            <!-- Average star rating attribute exists in all items -->
+		            <div class="average_star_rating">
+		            	<span v-for="idx in star_indices">
+		            		<i v-if="idx <= product.average_star_rating" class="fa fa-star"></i>
+		                    <i v-if="idx > product.average_star_rating" class="fa fa-star-o"></i>
+		            	</span>
+		            </div>
+		            <br>
+
+
+		            <!-- insert the review button:
+		            	ONCLICK:
+
+
+		            		-toggle_reviews takes in the current product's id, 
+		            			for every item in the list of products, 
+		            				if the id is not equal to the current product index, 
+		            					set the attribute show_reviews to false, 
+								show reviews for the current product id
+
+		            		-get_user_review takes in the product id and grabs details from API and puts up a new user review or edit an existing review
+
+		            		-get_other_reviews takes in the product id and grabs other review details from API  -->
+		            <div class="review_button">
+			            <button v-on:click="toggle_reviews(product._idx); get_user_review(product._idx); get_other_reviews(product._idx);">Reviews</button>	
+		            </div>
+
+		            <!-- if the user is logged in, present to them the shopping cart -->
+		            <div v-if="user_email != undefined">
+			            <div class="shopping_cart_button">
+
+
+			            	<!-- Product Info: ${product} -->
+
+
+			            	<!-- If the product is not in the shopping cart, Add to Shopping Cart -->
+			            	<button v-if="product.in_shopping_cart != true || product.in_shopping_cart === undefined" v-on:click="add_to_shopping_cart(product._idx)">Add to Shopping Cart</button>
+
+
+			            	<!-- otherwise, remove it -->
+			            	<button v-if="product.in_shopping_cart != false" v-on:click="add_to_shopping_cart(product._idx)">Remove from Shopping Cart</button>
+
+			            </div>
+			        </div>
+		          </div>
+
+		          	<!-- if show reviews is set to true display-->
+		            <div v-if="product.show_reviews">
+		            	<br>
+
+		            	<!-- if a user is defined, let them see their review/set stars -->
+		            	<div v-if= "user_email != undefined">
+
+		            		<!-- create container to hold stars -->
+		            		<div class="user_stars">
+
+		            			<!-- message to the user for template -->
+		            			<div class="user_stars_title">Your Rating:</div>
+
+
+		            			<!-- if the user is logged in -->
+		            			<div v-if="is_logged_in" class="star_rating">
+
+		            			<!-- allow mouse over and mouse out feature for stars, onclick: set the stars by taking in product index and the index they selected-->
+		              			<span v-on:mouseout="stars_out(product._idx)">
+		                		<span v-on:mouseover="stars_over(product._idx, idx)"
+		                		v-on:click="set_stars(product._idx, idx)"
+		                      	v-for="idx in star_indices">
+
+		                      	<!-- display the stars correctly based off the star the user clicked -->
+		                    	<i v-if="idx <= product._num_stars_display" class="fa fa-star"></i>
+		                    	<i v-if="idx > product._num_stars_display" class="fa fa-star-o"></i>
+		                		</span>
+		              			</span>
+		            			</div>
+		            		</div>
+
+		            	<!-- message to the user for template -->
+		            	<div class="review_title"><br>Your Review:</div><br>
+
+		            	<!-- this opens up the review_content of the user_review of the product -->
+		            	<textarea v-model="product.user_review.review_content" class="review_content"></textarea>
+		            	<!-- save button container -->
+		            	<div class="save_button_portion">
+
+		            		<!-- if it's not saved display the button, on click save the review -->
+		            		<br>
+		            		<button v-if="!product.user_review.saved" v-on:click="save_user_review(product._idx)" class="save_button">Save Review</button>
+
+		            		<!-- when the review is saved you can save it again, every time you save it, there should be a check mark displayed -->
+		            		<button v-if="product.user_review.saved" v-on:click="save_user_review(product._idx)" class="save_button">Save Review
+		            		<i class="fa fa-check"></i>
+		            		</button>
+		            	</div>
+		            	</div>
+
+		            	<!-- other reviews container, every user and non-logged accessor can see this -->
+		            	<div class="other_reviews">
+		            		<br>
+
+		            		<!-- if the user is defined and there exists other products  -->
+		            		<div v-if="product.other_reviews.length > 0 && user_email != undefined">
+
+		            			<!-- message to user for template -->
+		            			<div class="other_reviews_logged_in">Other Reviews:</div>
+		            		</div>
+
+		            		<!-- if the user is not defined and there exists other products -->
+		            		<div v-if="product.other_reviews.length > 0 && user_email === undefined">
+
+		            			<!-- message to user for template -->
+		            			<div class="other_reviews_logged_out">Reviews for this Product:</div>
+		            		</div>
+
+		            		<!-- for each review in the other reviews for the product -->
+		            		<div v-for="review in product.other_reviews" class="other_reviews">
+		            			<br>
+
+		            			<!-- show the email of the user -->
+		            			<div class="other_reviews_name">${review.review_email} says:</div>
+
+		            			<br>
+
+		            			<!-- show their rating -->
+		            			<div class="other_reviews_stars"> 
+					            	<span v-for="idx in star_indices">
+					            		<i v-if="idx <= review.review_stars" class="fa fa-star"></i>
+					                    <i v-if="idx > review.review_stars" class="fa fa-star-o"></i>
+					            	</span>
+		            			</div>
+		            			<br>
+		            			
+		            			<!-- and their review -->
+		            			<div class="other_review_review_content">${review.review_content}</div>
+		            			<br>
+		            		</div>
+
+		            		<!-- close reviews button -->
+		            		<div class="close_button">
+		            			<button v-on:click="toggle_reviews(product._idx)">Close Reviews</button>
+		            		</div>
+	            		</div>
+	            			</div>
+	        			</div>
+	      			</div>
+  	  			</div>
+    		</div>
+
+    		<div v-if="mode" class="shopping_cart_mode">
+
+    			<!-- If we somehow enter the shopping cart and its empty display a message to the user -->
+    			<div v-if="shopping_cart.length === 0">
+    				<h4>There are no items in your shopping cart.</h4>
+    			</div>
+
+    			<!-- if we have items in the shopping cart start traversing them -->
+    			<div v-if="shopping_cart.length > 0" v-for="product in shopping_cart">
+    				<div class="product_div">
+    					
+    					<!-- ${product} -->
+					  
+
+					  <!-- containers are seperate for each of the displayed attributes -->
+			          <div class="item_name">Item Name: ${product.product_table.item_name}</div>
+			          <br>
+			          <div class="item_description">Description: ${product.product_table.item_description}</div>
+			          <br>
+			          <div class="item_price">Item Price: $${product.product_table.selling_price}.00</div>
+			       	  <br>
+			       	  <div class="stock_quantity">Stock Quantity: ${product.product_table.stock_quantity}</div>
+			       	  <br>
+			       	  <div class="buy_quantity_title">Buy Quantity:</div>
+
+			       	  <!-- Seperate the buy_quantity_content in one line -->
+			       	  <div class="buy_quantity_content">
+			       	  	<span>
+
+			       	  		<!-- If we click the minus button, we decrement the quantity -->
+			       	  		<i v-on:click="decrement_quantity(product._idx)" class="fa fa-minus"></i>
+
+			       	  		<!-- if the quantity doesn't exist, just display a zero -->
+		            		<i v-if="!product.quantity"> 
+		            			<i>0</i>
+		            		</i>
+
+		            		<!-- otherwise, display the product's current quantity in the shopping cart -->
+		            		<i v-if="product.quantity">
+		            				<i>${product.quantity}</i>
+		            		</i>
+			       	  		
+			       	  		<!-- if we click the plus button, we increment the quantity -->
+			       	  		<i v-on:click="increment_quantity(product._idx)" class="fa fa-plus"></i>
+
+			       	  		
+			       	  		
+
+			       	  	</span>
+			       	  </div>
+    				
+    				</div>
+    				<br>
+    				<br>
+    			
+    			</div>
+
+    			<div class="total_info">
+    				<h4>You have a total of ${total_quantity} items in your cart for a total of $${total_price}</h4>
+    			</div>
+
+    			<div class="modal" id="modal">
+    				<div class="twothirds rounded white padded">
+    					<center><h3>Thank you for your order of $${total_price}</h3></center>
+    				</div>
+    				<div class="close_button">
+    					<button v-on:click="clear_cart();toggle_mode();">Go back</button>
+    				</div>
+    			</div>
+    			<div v-if="shopping_cart.length > 0">
+    				<div class="place_order_button">
+    					<a class="btn" href="#modal">Place Order</a>
+    				</div>
+    			</div>
+
+
+
+
+    		</div>
+
+
+
+
+
+
+    	</div>
+    </div>
+</div>
+<script src="{{=URL('static', 'js/default_index.js')}}"></script>
